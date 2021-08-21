@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -32,7 +31,6 @@ import (
 	"github.com/monetr/rest-api/pkg/metrics"
 	"github.com/monetr/rest-api/pkg/secrets"
 	"github.com/pkg/errors"
-	"github.com/plaid/plaid-go/plaid"
 	"github.com/spf13/cobra"
 )
 
@@ -315,14 +313,7 @@ func RunServer() error {
 		basicPaywall = billing.NewBasicPaywall(log, accountRepo)
 	}
 
-	plaidHelper := plaid_helper.NewPlaidClient(log, plaid.ClientOptions{
-		ClientID:    configuration.Plaid.ClientID,
-		Secret:      configuration.Plaid.ClientSecret,
-		Environment: configuration.Plaid.Environment,
-		HTTPClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-	})
+	plaidHelper := plaid_helper.NewPlaidClient(log, configuration.Plaid)
 
 	if configuration.Plaid.WebhooksEnabled {
 		log.Debugf("plaid webhooks are enabled and will be sent to: %s", configuration.Plaid.WebhooksDomain)

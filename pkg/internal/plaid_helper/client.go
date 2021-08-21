@@ -2,38 +2,52 @@ package plaid_helper
 
 import (
 	"context"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/getsentry/sentry-go"
+	"github.com/monetr/rest-api/pkg/config"
 	"github.com/pkg/errors"
 	"github.com/plaid/plaid-go/plaid"
 	"github.com/sirupsen/logrus"
-	"strings"
-	"time"
 )
 
-type Client interface {
-	CreateLinkToken(ctx context.Context, config plaid.LinkTokenConfigs) (*plaid.CreateLinkTokenResponse, error)
-	ExchangePublicToken(ctx context.Context, publicToken string) (*plaid.ExchangePublicTokenResponse, error)
-	GetAccounts(ctx context.Context, accessToken string, options plaid.GetAccountsOptions) ([]plaid.Account, error)
-	GetAllTransactions(ctx context.Context, accessToken string, start, end time.Time, accountIds []string) ([]plaid.Transaction, error)
-	GetAllInstitutions(ctx context.Context, countryCodes []string, options plaid.GetInstitutionsOptions) ([]plaid.Institution, error)
-	GetInstitutions(ctx context.Context, count, offset int, countryCodes []string, options plaid.GetInstitutionsOptions) (total int, _ []plaid.Institution, _ error)
-	GetInstitution(ctx context.Context, institutionId string, includeMetadata bool, countryCodes []string) (*plaid.Institution, error)
-	GetWebhookVerificationKey(ctx context.Context, keyId string) (plaid.GetWebhookVerificationKeyResponse, error)
-	RemoveItem(ctx context.Context, accessToken string) error
-	Close() error
-}
+type (
+	Client interface {
+		CreateLinkToken(ctx context.Context, config plaid.LinkTokenConfigs) (*plaid.CreateLinkTokenResponse, error)
+		ExchangePublicToken(ctx context.Context, publicToken string) (*plaid.ExchangePublicTokenResponse, error)
+		GetAccounts(ctx context.Context, accessToken string, options plaid.GetAccountsOptions) ([]plaid.Account, error)
+		GetAllTransactions(ctx context.Context, accessToken string, start, end time.Time, accountIds []string) ([]plaid.Transaction, error)
+		GetAllInstitutions(ctx context.Context, countryCodes []string, options plaid.GetInstitutionsOptions) ([]plaid.Institution, error)
+		GetInstitutions(ctx context.Context, count, offset int, countryCodes []string, options plaid.GetInstitutionsOptions) (total int, _ []plaid.Institution, _ error)
+		GetInstitution(ctx context.Context, institutionId string, includeMetadata bool, countryCodes []string) (*plaid.Institution, error)
+		GetWebhookVerificationKey(ctx context.Context, keyId string) (plaid.GetWebhookVerificationKeyResponse, error)
+		RemoveItem(ctx context.Context, accessToken string) error
+		Close() error
+	}
+
+	CreateLinkOptions struct {
+
+	}
+)
 
 var (
 	_ Client = &plaidClient{}
 )
 
-func NewPlaidClient(log *logrus.Entry, options plaid.ClientOptions) Client {
-	client, err := plaid.NewClient(options)
-	if err != nil {
-		// There currently isn't a code path that actually returns an error from the client. So if something happens
-		// then its new.
-		panic(err)
+func NewPlaidClient(log *logrus.Entry, options config.Plaid) Client {
+	httpClient := &http.Client{
+		Timeout: 60 * time.Second,
 	}
+
+	conf := plaid.NewConfiguration()
+	conf.HTTPClient = httpClient
+	conf.UseEnvironment(options.Environment)
+	conf.AddDefaultHeader("PLAID-CLIENT-ID", options.ClientID)
+	conf.AddDefaultHeader("PLAID-SECRET", options.ClientSecret)
+
+	client := plaid.NewAPIClient(conf)
 
 	return &plaidClient{
 		log:               log,
@@ -44,15 +58,20 @@ func NewPlaidClient(log *logrus.Entry, options plaid.ClientOptions) Client {
 
 type plaidClient struct {
 	log               *logrus.Entry
-	client            *plaid.Client
+	client            *plaid.APIClient
 	institutionTicker *time.Ticker
 }
 
-func (p *plaidClient) CreateLinkToken(ctx context.Context, config plaid.LinkTokenConfigs) (*plaid.CreateLinkTokenResponse, error) {
+func (p *plaidClient) CreateLinkToken(ctx context.Context, config CreateLinkTokenOptions) (*plaid.CreateLinkTokenResponse, error) {
 	span := sentry.StartSpan(ctx, "Plaid - CreateLinkToken")
 	defer span.Finish()
 
 	span.Data = map[string]interface{}{}
+
+
+	request := p.client.PlaidApi.LinkTokenCreate(span.Context())
+	result, _, err := p.client.PlaidApi.LinkTokenCreateExecute(request)
+	result.
 
 	result, err := p.client.CreateLinkToken(config)
 	span.Data["plaidRequestId"] = result.RequestID
@@ -85,13 +104,15 @@ func (p *plaidClient) ExchangePublicToken(ctx context.Context, publicToken strin
 	return &result, nil
 }
 
-func (p *plaidClient) GetAccounts(ctx context.Context, accessToken string, options plaid.GetAccountsOptions) ([]plaid.Account, error) {
+func (p *plaidClient) GetAccounts(ctx context.Context, accessToken string, options plaid.AccountsGetRequest) ([]plaid.AccountBase, error) {
 	span := sentry.StartSpan(ctx, "Plaid - GetAccounts")
 	defer span.Finish()
 	if span.Data == nil {
 		span.Data = map[string]interface{}{}
 	}
 	span.Data["options"] = options
+
+	p.client.PlaidApi.AccountsGetExecute()
 
 	result, err := p.client.GetAccountsWithOptions(accessToken, options)
 	span.Data["plaidRequestId"] = result.RequestID

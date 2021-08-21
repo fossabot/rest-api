@@ -5,6 +5,7 @@ import (
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/jarcoal/httpmock"
 	"github.com/monetr/rest-api/pkg/internal/mock_plaid"
+	"github.com/monetr/rest-api/pkg/internal/myownsanity"
 	"github.com/monetr/rest-api/pkg/internal/testutils"
 	"github.com/pkg/errors"
 	"github.com/plaid/plaid-go/plaid"
@@ -62,9 +63,7 @@ func TestPlaidClient_GetAccounts(t *testing.T) {
 		defer httpmock.Deactivate()
 
 		mock_plaid.MockGetAccountsError(t, plaid.Error{
-			APIResponse: plaid.APIResponse{
-				RequestID: gofakeit.UUID(),
-			},
+			RequestId:      myownsanity.StringP(gofakeit.UUID()),
 			ErrorType:      "ITEM_ERROR",
 			ErrorCode:      "NO_ACCOUNTS",
 			ErrorMessage:   "no valid accounts were found for this item",
